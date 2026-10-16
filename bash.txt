@@ -1,0 +1,2 @@
+g++ -O3 emulator.cpp -o macromag32
+./macromag32 program.bin
