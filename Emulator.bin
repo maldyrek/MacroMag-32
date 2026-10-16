@@ -1,0 +1,193 @@
+// ==============================================================================
+//  PROJECT: MacroMag-32 (The Black Box Computer Emulator)
+//  CORE FILE: emulator.cpp
+//  LICENSE: GNU General Public License v3 (GPL-3.0)
+//  FILOZOFIA: 100% Offline-First, Determinizm Czasu Rzeczywistego, Zero Śmieci
+// ==============================================================================
+
+#include <iostream>
+#include <vector>
+#include <cstdint>
+#include <iomanip>
+#include <string>
+#include <fstream>  // Obsługa strumieni plików binarnych
+
+class MacroMag32Core {
+private:
+    // 1. PRZESTRZEŃ PAMIĘCI RAM (32-bitowe adresowanie)
+    const size_t RAM_SIZE = 65536;
+    std::vector<uint8_t> ram;
+
+    // 2. REJESTRY PROCESORA (32-bitowe komórki)
+    std::vector<uint32_t> R;
+    uint32_t PC;
+
+    // 3. SPRZĘTOWY WATCHDOG
+    int watchdog_counter;
+
+    // Status procesora
+    bool is_running;
+    bool zero_flag;
+
+public:
+    MacroMag32Core() : ram(RAM_SIZE, 0), R(15, 0), PC(0x0000), watchdog_counter(100), is_running(true), zero_flag(false) {
+        std::cout << "[MacroMag-32] Inicjalizacja fizycznej architektury logicznej...\n";
+    }
+
+    bool get_is_running() const {
+        return is_running;
+    }
+
+    /** WSTRZYKNIĘCIE Z PLIKU BINARNEGO (.bin)
+        Wczytuje surowy kod maszynowy bezpośrednio z dysku bajt po bajcie do pamięci RAM. */
+    bool load_binary_file(uint32_t address, const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+        
+        if (!file.is_open()) {
+            std::cerr << "[CRITICAL] Błąd sprzętowy: Nie można otworzyć pliku " << filename << "\n";
+            return false;
+        }
+
+        std::cout << "[MacroMag-32] Wyszukiwanie sektora startowego... Ładowanie pliku: " << filename << "\n";
+
+        char byte;
+        uint32_t current_address = address;
+
+        // Czytamy plik bajt po bajcie bezpośrednio do pamięci emulatora (Zero bajtów śmieci)
+        while (file.get(byte)) {
+            if (current_address < RAM_SIZE) {
+                ram[current_address] = static_cast<uint8_t>(byte);
+                current_address++;
+            } else {
+                std::cout << "[WARNING] Przepełnienie bufora pamięci RAM! Obcięto plik binarny.\n";
+                break;
+            }
+        }
+
+        std::cout << "[MacroMag-32] Załadowano poprawnie " << (current_address - address) << " bajtów do RAM od adresu 0x" 
+                  << std::hex << std::uppercase << address << std::dec << "\n";
+        
+        file.close();
+        return true;
+    }
+
+    /** Wstrzykuje surowy kod maszynowy (z tablicy w pamięci) - zachowane dla testów */
+    void load_functional_operation(uint32_t address, const std::vector<uint8_t>& bytecode) {
+        for (size_t i = 0; i < bytecode.size(); ++i) {
+            if (address + i < RAM_SIZE) {
+                ram[address + i] = bytecode[i];
+            }
+        }
+    }
+
+    /** Pojedyncze tyknięcie zegara (Taktowanie). Cykl: Pobierz -> Rozszyfruj -> Wykonaj */
+    void run_cycle() {
+        if (!is_running) return;
+
+        // --- 1. FETCH (Pobranie instrukcji z RAM) ---
+        if (PC + 3 >= RAM_SIZE) {
+            std::cout << "[CRITICAL] Zawał Serca Taktowania: Przepełnienie licznika PC!\n";
+            is_running = false;
+            return;
+        }
+
+        uint8_t b0 = ram[PC];
+        uint8_t b1 = ram[PC + 1];
+        uint8_t b2 = ram[PC + 2];
+        uint8_t b3 = ram[PC + 3];
+
+        uint32_t opcode = (static_cast<uint32_t>(b0) << 24) |
+                          (static_cast<uint32_t>(b1) << 16) |
+                          (static_cast<uint32_t>(b2) << 8)  |
+                          b3;
+        PC += 4;
+
+        // --- 2. DECODE & EXECUTE ---
+        uint8_t instruction_type = (opcode >> 24) & 0xFF;
+
+        // [OPERACJA 0x01]: MOV
+        if (instruction_type == 0x01) {
+            uint8_t reg_idx = (opcode >> 16) & 0xFF;
+            uint16_t value = opcode & 0xFFFF;
+            if (reg_idx < 15) {
+                R[reg_idx] = value;
+                std::cout << "[EXECUTE] MOV: Wpisano wartość " << value << " do Rejestru R" << static_cast<int>(reg_idx) << "\n";
+            }
+        }
+        // [OPERACJA 0x02]: ADD
+        else if (instruction_type == 0x02) {
+            uint8_t reg_dest = (opcode >> 16) & 0xFF;
+            uint8_t reg_src = (opcode >> 8) & 0xFF;
+            if (reg_dest < 15 && reg_src < 15) {
+                R[reg_dest] += R[reg_src];
+                std::cout << "[EXECUTE] ADD: Dodano R" << static_cast<int>(reg_src) 
+                          << " do R" << static_cast<int>(reg_dest) 
+                          << ". Nowa wartość R" << static_cast<int>(reg_dest) << " = " << R[reg_dest] << "\n";
+            }
+        }
+        // [OPERACJA 0xAA]: BIOS
+        else if (instruction_type == 0xAA) {
+            launch_hidden_bios();
+        }
+        // [OPERACJA 0xFF]: HALT
+        else if (instruction_type == 0xFF) {
+            std::cout << "[EXECUTE] HALT: Otrzymano rozkaz zatrzymania układu.\n";
+            is_running = false;
+        }
+
+        // --- 3. KONTROLA STRAŻNIKA (Watchdog) ---
+        watchdog_counter--;
+        if (watchdog_counter <= 0) {
+            std::cout << "[CRITICAL] WATCHDOG TIMEOUT: System zamarzł. Fizyczny restart układu!\n";
+            is_running = false;
+        }
+    }
+
+    void launch_hidden_bios() {
+        std::cout << "\n==================================================\n";
+        std::cout << "     MACROMAG-32 INDUSTRIAL BIOS v0.1 (OFFLINE)     \n";
+        std::cout << "==================================================\n";
+        std::cout << " STAN REJESTRÓW: [";
+        for (int i = 0; i < 4; ++i) {
+            std::cout << "R" << i << ":" << R[i] << (i < 3 ? ", " : "");
+        }
+        std::cout << "]\n";
+        std::cout << " LICZNIK PROGRAMU (PC): 0x" << std::hex << std::uppercase << PC << std::dec << "\n";
+        std::cout << " STATUS STRAŻNIKA (WATCHDOG): " << watchdog_counter << "\n";
+        std::cout << "==================================================\n";
+        std::cout << "Naciśnij [ENTER], aby opuścić strefę bezpieczną BIOS...";
+        std::string dummy;
+        std::getline(std::cin, dummy);
+        std::cout << "Powrót do wykonywania wątku głównego jądra.\n\n";
+    }
+};
+
+// ==============================================================================
+// ROZRUCH TESTOWY (URUCHOMIENIE EMULATORA)
+// ==============================================================================
+int main(int argc, char* argv[]) {
+    MacroMag32Core cpu;
+
+    // Domyślna ścieżka do pliku z kodem maszynowym
+    std::string firmware_path = "program.bin";
+
+    // Jeśli użytkownik podał plik w argumencie (np. ./emulator moj_kod.bin), używamy go
+    if (argc > 1) {
+        firmware_path = argv[1];
+    }
+
+    // Próba załadowania oprogramowania układowego z pliku binarnego
+    if (!cpu.load_binary_file(0x0000, firmware_path)) {
+        std::cerr << "[FATAL] Zatrzymanie rozruchu: Brak oprogramowania układowego (Firmware).\n";
+        return 1;
+    }
+
+    // Uruchamiamy taktowanie zegara
+    std::cout << "[MacroMag-32] Włączenie zasilania. Start głównego zegara.\n\n";
+    
+    while (cpu.get_is_running()) {
+        cpu.run_cycle();
+    }
+
+    return 0;
+}
