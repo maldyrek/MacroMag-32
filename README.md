@@ -1,1 +1,4 @@
 # MacroMag-32
+Hi everyone, I’m a developer and a firm believer in Open Source. I’m sick and tired of modern hardware turning into e-waste due to corporate lockouts and artificial restrictions. As a passion project, I've started building MacroMag-32 – a powerful, 32-bit offline architecture based on magnetic modularity.
+I’ve just written the first, bare-bones emulator in Python, and the source code is available on my GitHub under the GPL v3 license. The system is primitive right now, but the goal is to pack it with a massive, native codebase of 5,000 functional offline operations, completely eliminating the overhead of hundreds of background processes.
+I’m looking for engineers and C/Rust developers who are smarter than me to help develop the microkernel and figure out the physics of the magnetic interconnects. What are your thoughts on this
