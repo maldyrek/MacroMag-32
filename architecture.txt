@@ -1,0 +1,34 @@
+## 🦾 MacroMag-32 Instruction Set Architecture (MM32-ISA) v1.0
+
+This specification defines the deterministic, 32-bit hardware register and execution layout simulated by `prototype.py` and targeted by `compiler.py`.
+
+### 1. Register Layout
+MacroMag-32 features an elegant, zero-overhead register file optimized for microkernel execution speed:
+* `R0` - Constant Zero Register (Always reads 0)
+* `R1` to `R12` - General Purpose Registers (GPR) for data manipulation
+* `SP` (`R13`) - Stack Pointer (Points to the active offline execution stack)
+* `LR` (`R14`) - Link Register (Stores the return address for subroutines)
+* `PC` (`R15`) - Program Counter (Points to the current instruction in the Emulator)
+
+### 2. Core Opcode Map & Binary Encoding
+Each instruction is strictly 32-bit wide to ensure absolute determinism and predictable clock-cycles.
+
+| Opcode (Hex) | Instruction | Syntax | Description |
+| :--- | :--- | :--- | :--- |
+| `0x01` | **ADD** | `ADD Rd, Rs1, Rs2` | Adds Rs1 and Rs2, stores result in Rd. |
+| `0x02` | **SUB** | `SUB Rd, Rs1, Rs2` | Subtracts Rs2 from Rs1, stores result in Rd. |
+| `0x03` | **LDR** | `LDR Rd, [Rs1]` | Load: Reads 32-bit word from memory address Rs1 into Rd. |
+| `0x04` | **STR** | `STR Rs1, [Rd]` | Store: Writes 32-bit word from Rs1 into memory address Rd. |
+| `0x05` | **MOV** | `MOV Rd, Imm16` | Moves a 16-bit immediate value into Rd. |
+| `0x06` | **CMP** | `CMP Rs1, Rs2` | Compares two registers and updates system status flags. |
+| `0x07` | **JMP** | `JMP Address` | Unconditional jump to a specific instruction memory address. |
+| `0x08` | **JEQ** | `JEQ Address` | Conditional jump: Jump if the previous comparison was Equal. |
+| `0x09` | **CALL** | `CALL Address` | Saves current PC to Link Register and jumps to subroutine. |
+| `0x0A` | **RET** | `RET` | Returns from subroutine by copying LR back into PC. |
+| `0x0F` | **HALT** | `HALT` | Terminates execution loop, safety sleep mode. |
+
+### 3. The 5,000 Offline Feature Engine (Hardware Interrupt Extensions)
+To call any of the 5,000 built-in, offline-first functional routines without internet overhead, MacroMag-32 uses the Hardware Software Interrupt (`SWI`) mechanism:
+
+* **Instruction:** `SWI Functional_ID` (`0x50 [24-bit ID]`)
+* **How it works:** When `SWI` is executed, the microkernel pauses user-space code, reads the 24-bit functional ID, and immediately jumps to the ultra-optimized native block embedded in the microkernel ROM (e.g., math processing, crypto functions, UI rendering).
