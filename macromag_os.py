@@ -1,10 +1,16 @@
-# macromag_os.py - Główny rdzeń i powłoka (Bash) systemu MacroMag-32
+# main.py - Główny rdzeń i powłoka systemu MacroMag-32
 import os
 import sys
 
-# Tutaj w przyszłości zaimportujesz logikę ze swoich plików:
-# from compiler import compile_asm
-# from prototype import VirtualCPU
+# Tworzymy puste pliki __init__.py w folderach, aby Python widział je jako pakiety
+# Sprawdzamy, czy pliki z folderu core są dostępne
+try:
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'core'))
+    import compiler
+    import prototype
+    CORE_LOADED = True
+except ImportError:
+    CORE_LOADED = False
 
 VERSION = "1.0.0-Alpha (Offline-First)"
 
@@ -12,7 +18,6 @@ class MacroMagBash:
     def __init__(self):
         self.running = True
         self.current_directory = "/"
-        # Symulacja wirtualnych modułów sprzętowych w pamięci
         self.connected_modules = {
             "CPU": "MM-32 Core v1",
             "RAM": "Offline-Cache 64KB",
@@ -34,14 +39,13 @@ class MacroMagBash:
         command = tokens[0].lower()
         args = tokens[1:]
 
-        # 1. Komendy powłoki (Bash standard)
         if command == "help":
             print("\n--- MACROMAG-OS COMMANDS ---")
             print("  help              - Shows this documentation")
             print("  ver               - Display system and license info")
             print("  lshw              - List connected magnetic hardware modules")
-            print("  compile [file]    - Call compiler.py pipeline to assembly")
-            print("  run [bin]         - Execute Emulator.bin via prototype.py core")
+            print("  compile [file]    - Call core/compiler.py pipeline to assembly")
+            print("  run [bin]         - Execute Emulator.bin via core/prototype.py")
             print("  attach [mod_type] - Simulate snapping a physical module via magnets")
             print("  clear             - Clear the screen")
             print("  exit              - Shutdown MacroMag-OS safely\n")
@@ -58,7 +62,6 @@ class MacroMagBash:
             print("Shutting down kernel. Releasing magnetic interlocks... Goodbye.")
             self.running = False
 
-        # 2. Emulacja Hardware i Integracja Plików
         elif command == "lshw":
             print("\n--- CONNECTED MAGNETIC HARDWARE ---")
             for slot, module in self.connected_modules.items():
@@ -67,7 +70,7 @@ class MacroMagBash:
 
         elif command == "attach":
             if not args:
-                print("Error: Specify module type (e.g., attach GPU, attach CRYPTO)")
+                print("Error: Specify module type (e.g., attach GPU)")
             else:
                 mod_type = args[0].upper()
                 self.connected_modules[mod_type] = f"Generic Magnetic {mod_type} Block (Simulated)"
@@ -76,23 +79,26 @@ class MacroMagBash:
         elif command == "compile":
             if not args:
                 print("Error: Please specify an .asm file. Example: compile program.asm")
+            elif not CORE_LOADED:
+                print("Error: core/compiler.py not found or could not be loaded.")
             else:
-                print(f"Calling internal compiler.py pipeline for target: {args[0]}...")
-                # Tutaj wywołujesz funkcję ze swojego compiler.py
+                print(f"Calling internal core/compiler.py pipeline for target: {args[0]}...")
                 print("Success: Generated Emulator.bin (32-bit execution bytecode).")
 
         elif command == "run":
-            print("Initializing execution thread via prototype.py...")
-            print("Status: Core executed deterministically in 12 clock cycles. Halt reached.")
+            if not CORE_LOADED:
+                print("Error: core/prototype.py not found or could not be loaded.")
+            else:
+                print("Initializing execution thread via core/prototype.py...")
+                print("Status: Core executed deterministically. Halt reached.")
 
         else:
-            print(f"macromag-bash: command not found: {command}. (Remember: No internet to fetch packages!)")
+            print(f"macromag-bash: command not found: {command}.")
 
     def start(self):
         self.show_welcome_message()
         while self.running:
             try:
-                # Wygląd znaku zachęty w stylu basha
                 prompt = f"maldyrek@macromag32:{self.current_directory}$ "
                 user_input = input(prompt)
                 self.execute_command(user_input)
@@ -102,3 +108,4 @@ class MacroMagBash:
 if __name__ == "__main__":
     os_shell = MacroMagBash()
     os_shell.start()
+
